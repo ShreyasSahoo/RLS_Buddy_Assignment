@@ -31,11 +31,26 @@ class HeartRateTableViewController: UITableViewController {
                 }
             }
         }
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(handleNewHeartRateSample(_:)), name: .newHeartRateSample, object: nil)
+    }
+
+    @objc private func handleNewHeartRateSample(_ notification: Notification) {
+        DispatchQueue.main.async {
+            if let sample = notification.object as? HKQuantitySample {
+                let heartRate = sample.quantity.doubleValue(for: HKUnit(from: "count/min"))
+                let date = sample.startDate
+                self.heartRateSamples.insert((heartRate, date), at: 0)
+                print("New sample added to table: \(heartRate) BPM at \(date)")
+                self.tableView.reloadData()
+            }
+        }
     }
 
     private func startFetchingHeartRate() {
         fetchHeartRate()
-        timer = Timer.scheduledTimer(timeInterval: 20, target: self, selector: #selector(fetchHeartRate), userInfo: nil, repeats: true)
+        timer = Timer.scheduledTimer(timeInterval: 300, target: self, selector: #selector(fetchHeartRate), userInfo: nil, repeats: true)
+        HeartRateManager.shared.startBackgroundFetching()
     }
 
     @objc private func fetchHeartRate() {
@@ -43,12 +58,12 @@ class HeartRateTableViewController: UITableViewController {
             guard let self = self else { return }
             DispatchQueue.main.async {
                 print("Health samples fetched!")
-                print("Heart Rate Samples: \(self.heartRateSamples)")
                 self.heartRateSamples = samples.map { sample in
                     let heartRate = sample.quantity.doubleValue(for: HKUnit(from: "count/min"))
                     let date = sample.startDate
                     return (heartRate, date)
                 }
+                self.heartRateSamples.sort { $0.date > $1.date }
                 self.tableView.reloadData()
             }
         }
@@ -64,7 +79,10 @@ class HeartRateTableViewController: UITableViewController {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "MMM dd, yyyy - HH:mm:ss"
         let dateStr = dateFormatter.string(from: sample.date)
-        cell.heartRateLabel.text = "Heart Rate: \(sample.heartRate) BPM at \(dateStr)"
+        
+        cell.dateLabel.text = dateStr
+        cell.heartRateLabel.text = "Heart Rate: \(sample.heartRate) BPM"
+        
         return cell
     }
     
